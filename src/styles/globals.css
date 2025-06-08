@@ -1,0 +1,12 @@
+/* Place global rules here */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+  min-height: 100vh;
+}
