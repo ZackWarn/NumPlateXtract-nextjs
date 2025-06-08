@@ -38,7 +38,7 @@ export default function LicensePlateDetector() {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
-        <div className={styles.logo}>NumPlateXtract</div>
+        <div className={styles.logo}>Welcome to NumPlateXtract</div>
         <div className={styles.tagline}>AI-Powered License Plate Detection & Recognition</div>
         <div className={styles.description}>
           <p>
