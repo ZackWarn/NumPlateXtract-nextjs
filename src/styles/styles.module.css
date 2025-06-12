@@ -129,7 +129,75 @@
   box-shadow: 0 5px 15px rgba(52,152,219,0.4);
 }
 
+/* Tabs */
+.tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+}
 
+.tabButton {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: #666;
+  border-bottom: 3px solid transparent;
+}
+
+.tabButton:hover {
+  color: #333;
+}
+
+.activeTab {
+  color: #2c3e50;
+  border-bottom: 3px solid #2980b9;
+  font-weight: bold;
+}
+
+/* Manual Input Section */
+.manualSection {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.manualInputContainer {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.manualInput {
+  padding: 12px 15px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  width: 300px;
+  max-width: 100%;
+}
+
+.checkButton {
+  padding: 12px 20px;
+  background-color: #2980b9;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.checkButton:hover {
+  background-color: #3498db;
+}
+
+.checkButton:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
   .imagePreview {
   width: 200px;
   height: auto;
