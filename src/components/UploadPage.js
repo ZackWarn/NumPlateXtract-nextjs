@@ -2,6 +2,25 @@ import { useState, useRef } from 'react';
 import styles from '../styles/styles.module.css';
 import ProcessingStatus from './ProcessingStatus';
 import UploadHistory from './UploadHistory';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../utils/firebase";
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+
+const savePlateToFirestore = async (plateNumber, confidence, source = 'upload') => {
+  try {
+    await addDoc(collection(db, 'plates'), {
+      plateNumber,
+      confidence,
+      source,
+      timestamp: serverTimestamp(),
+    });
+    console.log("✅ Plate saved to Firestore:", plateNumber);
+  } catch (err) {
+    console.error("❌ Failed to save plate:", err);
+  }
+};
+
 
 export default function LicensePlateDetector() {
   const [imageSrc, setImageSrc] = useState(null);
@@ -24,6 +43,29 @@ export default function LicensePlateDetector() {
     setConfidence('');
     setPlateInfo(null);
 
+    const downloadURL = await uploadToFirebase(file);
+console.log("Uploaded image to Firebase:", downloadURL);
+
+// After detection
+const base64 = await convertToBase64(file);
+const detectionResponse = await fetch("/api/detect", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ imageBase64: base64 }),
+});
+
+const detectionData = await detectionResponse.json();
+setPlateNumber(detectionData.plate);
+setConfidence(detectionData.confidence);
+
+// ✅ NOW save to Firestore
+await savePlateToFirestore(detectionData.plate, detectionData.confidence, 'upload');
+
+// Then continue with Ninja API
+await checkPlateWithNinjaAPI(detectionData.plate);
+
+
+
     try {
       const base64 = await convertToBase64(file);
 
@@ -45,34 +87,65 @@ export default function LicensePlateDetector() {
     }
   };
 
-  const handleManualCheck = async () => {
-    if (!manualPlateInput.trim()) return;
-    setPlateNumber(manualPlateInput.trim());
-    setConfidence('100%'); // Manual input gets 100% confidence
-    setImageSrc(null); // Clear any uploaded image
-    await checkPlateWithNinjaAPI(manualPlateInput.trim());
-  };
+  const uploadToFirebase = async (file) => {
+  const storageRef = ref(storage, `plates/${file.name}`);
+  await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(storageRef);
+  return url;
+};
+
+
+const handleManualCheck = async () => {
+  if (!manualPlateInput.trim()) return;
+
+  const plate = manualPlateInput.trim();
+  setPlateNumber(plate);
+  setConfidence('100%');
+  setImageSrc(null);
+
+  // ✅ Save to Firestore first
+  await savePlateToFirestore(plate, '100%', 'manual');
+
+  // ✅ Then check with Ninja API
+  await checkPlateWithNinjaAPI(plate);
+};
+
+
+
 
   const checkPlateWithNinjaAPI = async (plate) => {
-    if (!plate) return;
-    
-    setIsCheckingPlate(true);
-    try {
-      const response = await fetch("/api/verifyPlate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plateNumber: plate }),
-      });
+  if (!plate) return;
 
-      const data = await response.json();
-      setPlateInfo(data);
-    } catch (error) {
-      console.error("Error checking plate:", error);
-      setPlateInfo({ error: "Failed to check plate information" });
-    } finally {
-      setIsCheckingPlate(false);
+  setIsCheckingPlate(true);
+
+  try {
+    const response = await fetch("/api/verifyPlate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plateNumber: plate }),
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      setPlateInfo({ error: data.error });
+    } else {
+      setPlateInfo({
+        make: 'N/A',
+        model: 'N/A',
+        year: 'N/A',
+        color: 'N/A',
+        raw: data.result // Raw text from AI
+      });
     }
-  };
+  } catch (error) {
+    console.error("Error checking plate:", error);
+    setPlateInfo({ error: "Failed to check plate information" });
+  } finally {
+    setIsCheckingPlate(false);
+  }
+};
+
 
 
 
@@ -220,26 +293,32 @@ export default function LicensePlateDetector() {
                 )}
 
                 {isCheckingPlate ? (
-                  <div style={{ marginTop: '20px' }}>
-                    <div className={styles.spinner}></div>
-                    <p>Checking plate information...</p>
-                  </div>
-                ) : plateInfo ? (
-                  <div style={{ marginTop: '20px', textAlign: 'left', borderTop: '1px solid #ddd', paddingTop: '15px' }}>
-                    {plateInfo.error ? (
-                      <div style={{ color: '#e74c3c' }}>{plateInfo.error}</div>
-                    ) : (
-                      <>
-                        <h3 style={{ marginBottom: '10px' }}>Plate Information:</h3>
-                        <div><strong>Make:</strong> {plateInfo.make || 'Unknown'}</div>
-                        <div><strong>Model:</strong> {plateInfo.model || 'Unknown'}</div>
-                        <div><strong>Year:</strong> {plateInfo.year || 'Unknown'}</div>
-                        <div><strong>Color:</strong> {plateInfo.color || 'Unknown'}</div>
-                        {plateInfo.stolen && <div style={{ color: '#e74c3c', fontWeight: 'bold' }}>⚠️ Reported stolen</div>}
-                      </>
-                    )}
-                  </div>
-                ) : null}
+  <div style={{ marginTop: '20px' }}>
+    <div className={styles.spinner}></div>
+    <p>Checking plate information...</p>
+  </div>
+) : plateInfo ? (
+  <div style={{ marginTop: '20px', textAlign: 'left', borderTop: '1px solid #ddd', paddingTop: '15px' }}>
+    {plateInfo.error ? (
+      <div style={{ color: '#e74c3c' }}>{plateInfo.error}</div>
+    ) : plateInfo.raw ? (
+      <div style={{ whiteSpace: 'pre-line', marginTop: '10px' }}>
+        <strong>AI Response:</strong><br />
+        {plateInfo.raw}
+      </div>
+    ) : (
+      <>
+        <h3 style={{ marginBottom: '10px' }}>Plate Information:</h3>
+        <div><strong>Make:</strong> {plateInfo.make || 'Unknown'}</div>
+        <div><strong>Model:</strong> {plateInfo.model || 'Unknown'}</div>
+        <div><strong>Year:</strong> {plateInfo.year || 'Unknown'}</div>
+        <div><strong>Color:</strong> {plateInfo.color || 'Unknown'}</div>
+        {plateInfo.stolen && <div style={{ color: '#e74c3c', fontWeight: 'bold' }}>⚠️ Reported stolen</div>}
+      </>
+    )}
+  </div>
+) : null}
+
               </div>
             ) : (
               <div className={styles.noResults}>

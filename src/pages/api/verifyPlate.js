@@ -1,3 +1,4 @@
+// pages/api/verifyPlate.js
 import axios from 'axios';
 
 export default async function handler(req, res) {
@@ -6,27 +7,48 @@ export default async function handler(req, res) {
   }
 
   const { plateNumber } = req.body;
+
   if (!plateNumber) {
     return res.status(400).json({ error: 'No plate number provided' });
+  }
+
+  const apiKey = process.env.NINJA_API_KEY;
+
+  console.log("🔍 Plate:", plateNumber);
+  console.log("🔐 API key exists?", !!apiKey); // should be true
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'API key is missing in environment variables.' });
   }
 
   try {
     const response = await axios.post(
       'https://api.api-ninjas.com/v1/chat',
       {
-        message: `Analyze the license plate: "${plateNumber}". Is it valid? Which region/state is it from? Is the format correct?`
+        message: `Check the license plate: "${plateNumber}". Is it in valid Indian format? Which state is it from?`
       },
       {
         headers: {
-          'X-Api-Key': process.env.NINJA_API_KEY,
-          'Content-Type': 'application/json'
-        }
+          'X-Api-Key': apiKey,
+          'Content-Type': 'application/json',
+        },
       }
     );
 
+    console.log("✅ API Success:", response.data);
+
     res.status(200).json({ result: response.data.response });
   } catch (err) {
-    console.error('Ninja API error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to fetch plate info from AI API.' });
+    console.error("❌ API call failed");
+    console.error("Error message:", err.message);
+    if (err.response) {
+      console.error("Status code:", err.response.status);
+      console.error("Response data:", err.response.data);
+    }
+
+    res.status(500).json({
+      error: 'Failed to fetch plate info from Ninja API.',
+      details: err.response?.data || err.message,
+    });
   }
 }
